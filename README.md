@@ -20,3 +20,13 @@ git clone https://github.com/kravietz/pam_tacplus.git
 ```bash
 docker-compose up
 ```
+
+## Notes
+- `docker-compose up` never rebuilds an image to to do that run `docker-compose build`
+
+- To run just one of the containers (and remove the container afterwards):
+`docker-compose run --rm tac_plus bash`
+
+- To copy file out of the container run: `docker cp pam-tacplus-docker-dev-env_tac_plus_run_1379a5df0b19:/etc/tacacs+/tac_plus.conf .`
+
+- To get a terminal to an already docker-compose up'd container run `docker-compose exec tac_plus bash`

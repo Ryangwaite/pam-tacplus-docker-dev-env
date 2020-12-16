@@ -2,7 +2,15 @@ version: "3.7"
 services:
   tac_plus:
     build: "./tac_plus"
-    ports:
-      - "49:49"
     volumes:
       - ${PWD}/tac_plus/tac_plus.conf:/etc/tacacs+/tac_plus.conf
+  pam_tacplus-client:
+      build: "./pam_tacplus-client"
+      # The following options are so the container doesn't exit immediately
+      # and i can run 'docker-compose exec pam_tacplus-client bash' to attach
+      # a console
+      stdin_open: true    # docker run -i
+      tty: true           # docker run -t
+      volumes:
+       - ${PWD}/pam_tacplus:/root/src/pam_tacplus
+       - ${PWD}/pam_tacplus-client/test-pam.conf:/etc/pam.d/test

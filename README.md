@@ -29,4 +29,8 @@ docker-compose up
 
 - To copy file out of the container run: `docker cp pam-tacplus-docker-dev-env_tac_plus_run_1379a5df0b19:/etc/tacacs+/tac_plus.conf .`
 
-- To get a terminal to an already docker-compose up'd container run `docker-compose exec tac_plus bash`
+- To get a terminal to an already docker-compose up'd container run `$ docker-compose exec pam_tacplus-client bash`
+
+- From the `pam_tacplus-client` container i can ping the tac_plus container with `ping tac_plus`
+
+

@@ -30,6 +30,10 @@ RUN sed -i '/imklog/s/^/#/' /etc/rsyslog.conf
 # Create directory to mount the pam_tacplus git repo
 RUN mkdir -p /root/src/pam_tacplus
 
+# Display the contents of this file on login
+COPY msg-to-user-on-login /etc/motd
+RUN echo 'cat /etc/motd' >> /root/.bashrc
+
 WORKDIR /root/src/pam_tacplus
 
 # Use rsyslogd to keep the container running so that a bash terminal can be

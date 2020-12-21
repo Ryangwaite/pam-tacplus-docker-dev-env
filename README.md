@@ -2,6 +2,10 @@
 
 ## Overview
 
+I've created this repo for the primary use case of reproducing and fixing this bug: https://github.com/kravietz/pam_tacplus/pull/166
+
+Although it is likely to be useful beyond that 🙂
+
 There's 2 docker containers:
 - `pam_tacplus-client` - responsible for building, installing then running the `tacc` client
 - `tac_plus` - runs a `tac_plus` server.

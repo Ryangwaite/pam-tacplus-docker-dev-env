@@ -11,20 +11,38 @@ There's 2 docker containers:
 1. Clone https://github.com/kravietz/pam_tacplus into the root of this repo.
 
 ```bash
-git clone https://github.com/kravietz/pam_tacplus.git
+$ git clone https://github.com/kravietz/pam_tacplus.git
 ```
 
 2. Run docker-compose:
 ```bash
-docker-compose up
+$ docker-compose up
 ```
 
 3. In a new terminal obtain a bash terminal in `pam_tacplus-client` with:
 ```bash
 docker-compose exec pam_tacplus-client bash
 ```
+4. Build and install the module as follows:
 
-TODO: add notes on running `make install`
+```bash
+$ autoreconf -i
+$ ./configure --libdir=/lib
+$ make
+$ make install
+```
+
+For successive builds and installs run:
+```bash
+$ make clean all install
+```
+IDK why, but i seem to need to run the `clean` target between builds when configured this way. It's quick so not going to worry about fixing it.
+
+> Note: I couldn't get it to work when the sources were installed into `/usr/local/lib/security/` with a corresponding `test-pam.conf` change. So i've opted for the install into `/lib/security` instead which works.
+
+The pam_tacplus authentication logs can be found at `/var/log/syslog` in `pam_tacplus-client`
+
+---
 
 ## Reproducing the bug
 
@@ -33,88 +51,36 @@ Run the following on a bash terminal in `pam_tacplus-client`:
 # pamtester -v -I rhost=tac_plus test bigpuser authenticate acct_mgmt <<< default
 pamtester: invoking pam_start(test, bigpuser, ...)
 pamtester: performing operation - authenticate
-pamtester: successfully authenticated
+Password: pamtester: successfully authenticated
 pamtester: performing operation - acct_mgmt
 pamtester: Permission denied
 ```
 > Note: the `<<< default` heredoc supplies the password at the prompt.
 
-`/var/log/auth.log` in container `pam_tacplus-client` shows:
+`/var/log/syslog` in container `pam_tacplus-client` shows:
 ```
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: 1 servers defined
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: server[0] { addr=172.20.0.2:49, key='********' }
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_service=''
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_protocol=''
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_prompt=''
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_login=''
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: called (pam_tacplus v1.3.8)
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: user [bigpuser] obtained
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: tacacs_get_password: called
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: tacacs_get_password: obtained password
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: password obtained
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: tty [unknown] obtained
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: rhost [tac_plus] obtained
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: trying srv 0
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: active srv 0
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_authenticate: exit with pam status: 0
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: 1 servers defined
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: server[0] { addr=172.20.0.2:49, key='********' }
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_service='ppp'
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_protocol='ip'
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_prompt=''
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: tac_login=''
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: called (pam_tacplus v1.3.8)
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: username obtained [bigpuser]
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: tty obtained [unknown]
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: rhost obtained [tac_plus]
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: active server is [172.20.0.2:49]
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: pam_sm_acct_mgmt: sent authorization request
-Dec 18 09:37:52 74c69bb871fa pamtester[271]: tac_author_read: short reply body, read 14468 of 41656: Operation now in progress
-Dec 18 09:37:52 74c69bb871fa PAM-tacplus[271]: TACACS+ authorisation failed for [bigpuser]
-
+[...]
+Dec 21 06:47:00 73932c90c2d3 pamtester: pam_sm_acct_mgmt: sent authorization request
+Dec 21 06:47:00 73932c90c2d3 pamtester: tac_author_read_timeout: short reply body, read 28948 of 41656
+Dec 21 06:47:00 73932c90c2d3 pamtester: PAM-tacplus: TACACS+ authorisation failed for [bigpuser]
 ```
-> The last two logs show the problem. PAM-tacplus is processing a partially read Authorization-Reply packet instead of waiting and entirely reading it before processing it.
+> The last two logs show the problem. PAM-tacplus is processing a partially read Authorization-Reply packet instead of waiting and entirely reading it before processing it. The issue doesn't occur 100% of the time in this environment (maybe 70%?) so might need to try running the cmd again to hit it.
 
 In comparison to a user with a small Authorization-Reply packet:
 ```
 # pamtester -v -I rhost=tac_plus test smallpuser authenticate acct_mgmt <<< default
 pamtester: invoking pam_start(test, smallpuser, ...)
 pamtester: performing operation - authenticate
-pamtester: successfully authenticated
+Password: pamtester: successfully authenticated
 pamtester: performing operation - acct_mgmt
 pamtester: account management done.
 ```
 and syslog shows:
 ```
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: 1 servers defined
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: server[0] { addr=172.20.0.2:49, key='********' }
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_service=''
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_protocol=''
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_prompt=''
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_login=''
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: called (pam_tacplus v1.3.8)
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: user [smallpuser] obtained
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: tacacs_get_password: called
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: tacacs_get_password: obtained password
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: password obtained
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: tty [unknown] obtained
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: rhost [tac_plus] obtained
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: trying srv 0
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: active srv 0
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_authenticate: exit with pam status: 0
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: 1 servers defined
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: server[0] { addr=172.20.0.2:49, key='********' }
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_service='ppp'
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_protocol='ip'
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_prompt=''
-Dec 18 09:39:37 74c69bb871fa PAM-tacplus[272]: tac_login=''
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: called (pam_tacplus v1.3.8)
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: username obtained [smallpuser]
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: tty obtained [unknown]
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: rhost obtained [tac_plus]
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: active server is [172.20.0.2:49]
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: sent authorization request
-Dec 18 09:39:37 74c69bb871fa pamtester[272]: pam_sm_acct_mgmt: user [smallpuser] successfully authorized
+[...]
+Dec 21 06:49:47 73932c90c2d3 pamtester: pam_sm_acct_mgmt: sent authorization request
+Dec 21 06:49:47 73932c90c2d3 pamtester: Args cnt 0
+Dec 21 06:49:47 73932c90c2d3 pamtester: pam_sm_acct_mgmt: user [smallpuser] successfully authorized
 ```
 
 This is working as expected.

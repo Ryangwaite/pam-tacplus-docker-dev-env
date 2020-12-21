@@ -2,7 +2,6 @@ FROM ubuntu:18.04
 
 # Install packages needed to build pam_tacplus
 RUN apt-get update && apt-get install -y \
-    libpam-tacplus \
     autoconf \
     build-essential \
     libtool \
